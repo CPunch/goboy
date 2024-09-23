@@ -63,11 +63,12 @@ func (a *APU) Init(sound bool) {
 	const bufferSeconds = 120
 
 	if sound {
-		var err error
-		a.player, err = oto.NewPlayer(sampleRate, 2, 1, sampleRate/bufferSeconds)
+		otoCtx, err := oto.NewContext(sampleRate, 2, 1, sampleRate/bufferSeconds)
 		if err != nil {
-			log.Fatalf("Failed to start audio: %v", err)
+			log.Printf("error creating oto context: %v", err)
 		}
+
+		a.player = otoCtx.NewPlayer()
 		a.playSound(bufferSeconds)
 	}
 }
@@ -92,6 +93,7 @@ func (a *APU) playSound(bufferSeconds int) {
 			}
 
 			_, err := a.player.Write(buffer)
+			// log.Printf("sound buffer len: %v", len(buffer))
 			if err != nil {
 				log.Printf("error sampling: %v", err)
 			}

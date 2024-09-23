@@ -1,6 +1,7 @@
 package gb
 
 import (
+	"io"
 	"log"
 
 	"github.com/Humpheh/goboy/pkg/bits"
@@ -91,9 +92,9 @@ func (mem *Memory) Init(gameboy *Gameboy) {
 }
 
 // LoadCart load a cart rom into memory.
-func (mem *Memory) LoadCart(loc string) (bool, error) {
+func (mem *Memory) LoadCart(loc string, saver io.ReadWriter) (bool, error) {
 	var err error
-	mem.Cart, err = cart.NewCartFromFile(loc)
+	mem.Cart, err = cart.NewCartFromFile(loc, saver)
 	if err != nil {
 		return false, err
 	}

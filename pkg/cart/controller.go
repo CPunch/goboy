@@ -1,12 +1,11 @@
 package cart
 
 import (
-	"archive/zip"
-	"errors"
-	"io/ioutil"
+	"bytes"
+	"io"
 	"log"
+	"os"
 	"strings"
-	"time"
 )
 
 // Mode represents the types of mode the GameBoy can run in.
@@ -58,6 +57,7 @@ type Cart struct {
 	title    string
 	filename string
 	mode     Mode
+	saver    io.ReadWriter
 }
 
 // GetName returns the name of the cartridge. This is retrieved from the memory location
@@ -91,38 +91,33 @@ func (c *Cart) GetMode() Mode {
 
 // Attempt to load a save game from the expected location.
 func (c *Cart) initGameSaves() {
-	saveData, err := ioutil.ReadFile(c.GetSaveFilename())
+	if c.saver == nil {
+		return
+	}
+
+	saveData, err := io.ReadAll(c.saver)
 	if err == nil {
 		c.LoadSaveData(saveData)
 	}
-	// Write the RAM to file every second
-	// TODO: improve this behaviour
-	ticker := time.NewTicker(time.Second)
-	go func() {
-		for range ticker.C {
-			c.Save()
-		}
-	}()
 }
 
 // Save dumps the carts RAM to the save location.
 func (c *Cart) Save() {
-	data := c.BankingController.GetSaveData()
-	if len(data) > 0 {
-		err := ioutil.WriteFile(c.GetSaveFilename(), data, 0644)
-		if err != nil {
-			log.Printf("Error saving cartridge RAM: %v", err)
-		}
+	if c.saver == nil {
+		return
 	}
+
+	data := c.BankingController.GetSaveData()
+	io.Copy(c.saver, bytes.NewReader(data))
 }
 
 // NewCartFromFile loads a cartridge ROM from a file.
-func NewCartFromFile(filename string) (*Cart, error) {
-	rom, err := loadROMData(filename)
+func NewCartFromFile(filename string, saver io.ReadWriter) (*Cart, error) {
+	rom, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
-	return NewCart(rom, filename), nil
+	return NewCart(rom, filename, saver), nil
 }
 
 // NewCart loads a cartridge ROM from a byte array and returns a new cartridge with
@@ -134,36 +129,36 @@ func NewCartFromFile(filename string) (*Cart, error) {
 // all of the controllers are supported, and the function will only start the
 // save loop for controllers which support RAM+BATTERY.
 //
-//     0x00  ROM ONLY
-//     0x01  MBC1
-//     0x02  MBC1+RAM
-//     0x03  MBC1+RAM+BATTERY
-//     0x05  MBC2
-//     0x06  MBC2+BATTERY
-//     0x08  ROM+RAM
-//     0x09  ROM+RAM+BATTERY
-//     0x0B  MMM01
-//     0x0C  MMM01+RAM
-//     0x0D  MMM01+RAM+BATTERY
-//     0x0F  MBC3+TIMER+BATTERY
-//     0x10  MBC3+TIMER+RAM+BATTERY
-//     0x11  MBC3
-//     0x12  MBC3+RAM
-//     0x13  MBC3+RAM+BATTERY
-//     0x15  MBC4
-//     0x16  MBC4+RAM
-//     0x17  MBC4+RAM+BATTERY
-//     0x19  MBC5
-//     0x1A  MBC5+RAM
-//     0x1B  MBC5+RAM+BATTERY
-//     0x1C  MBC5+RUMBLE
-//     0x1D  MBC5+RUMBLE+RAM
-//     0x1E  MBC5+RUMBLE+RAM+BATTERY
-//     0xFC  POCKET CAMERA
-//     0xFD  BANDAI TAMA5
-//     0xFE  HuC3
-//     0xFF  HuC1+RAM+BATTERY
-func NewCart(rom []byte, filename string) *Cart {
+//	0x00  ROM ONLY
+//	0x01  MBC1
+//	0x02  MBC1+RAM
+//	0x03  MBC1+RAM+BATTERY
+//	0x05  MBC2
+//	0x06  MBC2+BATTERY
+//	0x08  ROM+RAM
+//	0x09  ROM+RAM+BATTERY
+//	0x0B  MMM01
+//	0x0C  MMM01+RAM
+//	0x0D  MMM01+RAM+BATTERY
+//	0x0F  MBC3+TIMER+BATTERY
+//	0x10  MBC3+TIMER+RAM+BATTERY
+//	0x11  MBC3
+//	0x12  MBC3+RAM
+//	0x13  MBC3+RAM+BATTERY
+//	0x15  MBC4
+//	0x16  MBC4+RAM
+//	0x17  MBC4+RAM+BATTERY
+//	0x19  MBC5
+//	0x1A  MBC5+RAM
+//	0x1B  MBC5+RAM+BATTERY
+//	0x1C  MBC5+RUMBLE
+//	0x1D  MBC5+RUMBLE+RAM
+//	0x1E  MBC5+RUMBLE+RAM+BATTERY
+//	0xFC  POCKET CAMERA
+//	0xFD  BANDAI TAMA5
+//	0xFE  HuC3
+//	0xFF  HuC1+RAM+BATTERY
+func NewCart(rom []byte, filename string, saver io.ReadWriter) *Cart {
 	cartridge := Cart{
 		filename: filename,
 	}
@@ -215,38 +210,4 @@ func NewCart(rom []byte, filename string) *Cart {
 		cartridge.initGameSaves()
 	}
 	return &cartridge
-}
-
-// Open the file and load the data out of it as an array of bytes. If the file is
-// a zip file containing one file, then open that as the rom instead.
-func loadROMData(filename string) ([]byte, error) {
-	var data []byte
-	if strings.HasSuffix(filename, ".zip") {
-		return loadZIPData(filename)
-	}
-	// Load the file as a rom
-	var err error
-	data, err = ioutil.ReadFile(filename)
-	if err != nil {
-		return nil, err
-	}
-	return data, nil
-}
-
-// Load a zip file with a single rom in it.
-func loadZIPData(filename string) ([]byte, error) {
-	// Load the rom from a zip file
-	reader, err := zip.OpenReader(filename)
-	if err != nil {
-		return nil, err
-	}
-	if len(reader.File) != 1 {
-		return nil, errors.New("zip must contain one file")
-	}
-	f := reader.File[0]
-	fo, err := f.Open()
-	if err != nil {
-		return nil, err
-	}
-	return ioutil.ReadAll(fo)
 }

@@ -1,11 +1,14 @@
 package gb
 
+import "io"
+
 // GameboyOption is an option for the Gameboy execution.
 type GameboyOption func(o *gameboyOptions)
 
 type gameboyOptions struct {
 	sound   bool
 	cgbMode bool
+	saver   io.ReadWriter // Save location
 
 	// Callback when the serial port is written to
 	transferFunction func(byte)
@@ -48,6 +51,12 @@ func WithCGBEnabled() GameboyOption {
 func WithSound() GameboyOption {
 	return func(o *gameboyOptions) {
 		o.sound = true
+	}
+}
+
+func WithSaveFile(saver io.ReadWriter) GameboyOption {
+	return func(o *gameboyOptions) {
+		o.saver = saver
 	}
 }
 

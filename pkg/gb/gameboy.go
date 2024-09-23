@@ -298,7 +298,7 @@ func (gb *Gameboy) init(romFile string) error {
 	gb.setup()
 
 	// Load the ROM file
-	hasCGB, err := gb.Memory.LoadCart(romFile)
+	hasCGB, err := gb.Memory.LoadCart(romFile, gb.options.saver)
 	if err != nil {
 		return fmt.Errorf("failed to open rom file: %s", err)
 	}
