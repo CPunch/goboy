@@ -446,3 +446,69 @@ func (mem *Memory) performNewDMATransfer(length uint16) {
 	mem.HighRAM[0x53] = byte(destination >> 8)
 	mem.HighRAM[0x54] = byte(destination & 0xF0)
 }
+
+func (mem *Memory) SaveState(writer io.Writer) error {
+	// Write high ram
+	_, err := writer.Write(mem.HighRAM[:])
+	if err != nil {
+		return err
+	}
+
+	// Write VRAM
+	_, err = writer.Write(mem.VRAM[:])
+	if err != nil {
+		return err
+	}
+
+	// Write WRAM
+	_, err = writer.Write(mem.WRAM[:])
+	if err != nil {
+		return err
+	}
+
+	// Write OAM
+	_, err = writer.Write(mem.OAM[:])
+	if err != nil {
+		return err
+	}
+
+	// Write Cart
+	if err := mem.Cart.SaveState(writer); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (mem *Memory) LoadState(reader io.Reader) error {
+	// Read high ram
+	_, err := reader.Read(mem.HighRAM[:])
+	if err != nil {
+		return err
+	}
+
+	// Read VRAM
+	_, err = reader.Read(mem.VRAM[:])
+	if err != nil {
+		return err
+	}
+
+	// Read WRAM
+	_, err = reader.Read(mem.WRAM[:])
+	if err != nil {
+		return err
+	}
+
+	// Read OAM
+	_, err = reader.Read(mem.OAM[:])
+	if err != nil {
+		return err
+	}
+
+	// Read Cart
+	if err := mem.Cart.LoadState(reader); err != nil {
+		return err
+	}
+
+	return nil
+}

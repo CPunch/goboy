@@ -1,7 +1,9 @@
 package gb
 
 import (
+	"encoding/binary"
 	"fmt"
+	"io"
 
 	"github.com/Humpheh/goboy/pkg/apu"
 	"github.com/Humpheh/goboy/pkg/bits"
@@ -344,6 +346,120 @@ func (gb *Gameboy) setup() {
 	gb.BGPalette = NewPalette()
 
 	gb.initKeyHandlers()
+}
+
+func (gb *Gameboy) SaveState(writer io.Writer) error {
+	// Write registers
+	if err := binary.Write(writer, binary.LittleEndian, gb.CPU.AF.HiLo()); err != nil {
+		return err
+	}
+
+	if err := binary.Write(writer, binary.LittleEndian, gb.CPU.BC.HiLo()); err != nil {
+		return err
+	}
+
+	if err := binary.Write(writer, binary.LittleEndian, gb.CPU.DE.HiLo()); err != nil {
+		return err
+	}
+
+	if err := binary.Write(writer, binary.LittleEndian, gb.CPU.HL.HiLo()); err != nil {
+		return err
+	}
+
+	if err := binary.Write(writer, binary.LittleEndian, gb.CPU.PC); err != nil {
+		return err
+	}
+
+	if err := binary.Write(writer, binary.LittleEndian, gb.CPU.SP.HiLo()); err != nil {
+		return err
+	}
+
+	// Write timerCounter
+	if err := binary.Write(writer, binary.LittleEndian, int32(gb.timerCounter)); err != nil {
+		return err
+	}
+
+	// Write ticks
+	if err := binary.Write(writer, binary.LittleEndian, int32(gb.thisCpuTicks)); err != nil {
+		return err
+	}
+
+	// Write interrupts
+	ints := byte(0)
+	if gb.interruptsEnabling {
+		ints = 1
+	}
+	if gb.interruptsOn {
+		ints |= 2
+	}
+	if gb.halted {
+		ints |= 3
+	}
+	if err := binary.Write(writer, binary.LittleEndian, ints); err != nil {
+		return err
+	}
+
+	// Write Memory
+	return gb.Memory.SaveState(writer)
+}
+
+func (gb *Gameboy) LoadState(reader io.Reader) error {
+	// Read registers
+	var tmp uint16
+	if err := binary.Read(reader, binary.LittleEndian, &tmp); err != nil {
+		return err
+	}
+	gb.CPU.AF.Set(tmp)
+
+	if err := binary.Read(reader, binary.LittleEndian, &tmp); err != nil {
+		return err
+	}
+	gb.CPU.BC.Set(tmp)
+
+	if err := binary.Read(reader, binary.LittleEndian, &tmp); err != nil {
+		return err
+	}
+	gb.CPU.DE.Set(tmp)
+
+	if err := binary.Read(reader, binary.LittleEndian, &tmp); err != nil {
+		return err
+	}
+	gb.CPU.HL.Set(tmp)
+
+	if err := binary.Read(reader, binary.LittleEndian, &tmp); err != nil {
+		return err
+	}
+	gb.CPU.PC = tmp
+
+	if err := binary.Read(reader, binary.LittleEndian, &tmp); err != nil {
+		return err
+	}
+	gb.CPU.SP.Set(tmp)
+
+	// Read timerCounter
+	var tmp32 int32
+	if err := binary.Read(reader, binary.LittleEndian, &tmp32); err != nil {
+		return err
+	}
+	gb.timerCounter = int(tmp32)
+
+	// Read ticks
+	if err := binary.Read(reader, binary.LittleEndian, &tmp32); err != nil {
+		return err
+	}
+	gb.thisCpuTicks = int(tmp32)
+
+	// Read interrupts
+	var ints byte
+	if err := binary.Read(reader, binary.LittleEndian, &ints); err != nil {
+		return err
+	}
+	gb.interruptsEnabling = ints&1 != 0
+	gb.interruptsOn = ints&2 != 0
+	gb.halted = ints&4 != 0
+
+	// Read Memory
+	return gb.Memory.LoadState(reader)
 }
 
 // NewGameboy returns a new Gameboy instance.

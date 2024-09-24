@@ -1,5 +1,7 @@
 package cart
 
+import "io"
+
 // NewROM returns a new ROM cartridge.
 func NewROM(data []byte) BankingController {
 	return &ROM{
@@ -35,3 +37,15 @@ func (r *ROM) GetSaveData() []byte {
 // LoadSaveData loads the save data into the cartridge. As RAM is not supported
 // on this memory controller, this is a noop.
 func (r *ROM) LoadSaveData([]byte) {}
+
+// SaveState saves the state of the banking controller. As RAM is not supported
+// on this memory controller, this is a noop.
+func (r *ROM) SaveState(io.Writer) error {
+	return nil
+}
+
+// LoadState loads the state of the banking controller. As RAM is not supported
+// on this memory controller, this is a noop.
+func (r *ROM) LoadState(io.Reader) error {
+	return nil
+}

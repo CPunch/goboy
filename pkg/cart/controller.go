@@ -2,6 +2,7 @@ package cart
 
 import (
 	"bytes"
+	"encoding/binary"
 	"io"
 	"log"
 	"os"
@@ -44,6 +45,65 @@ type BankingController interface {
 	// LoadSaveData loads some save data into the cartridge. The banking
 	// controller implementation can decide how this data should be loaded.
 	LoadSaveData(data []byte)
+
+	// SaveState saves the state of the banking controller.
+	SaveState(io.Writer) error
+
+	// LoadState loads the state of the banking controller.
+	LoadState(io.Reader) error
+}
+
+type BaseMBC struct {
+	BankingController
+	Rom     []byte
+	RomBank uint32
+
+	Ram        []byte
+	RamEnabled bool
+}
+
+// SaveState saves the state of the banking controller.
+func (r *BaseMBC) SaveState(writer io.Writer) error {
+	// Write rombank
+	_, err := writer.Write([]byte{byte(r.RomBank)})
+	if err != nil {
+		return err
+	}
+
+	// Write ramEnabled
+	en := byte(0)
+	if r.RamEnabled {
+		en = 1
+	}
+	_, err = writer.Write([]byte{byte(en)})
+	if err != nil {
+		return err
+	}
+
+	// Write ram
+	_, err = writer.Write(r.Ram)
+	return err
+}
+
+// LoadState loads the state of the banking controller.
+func (r *BaseMBC) LoadState(reader io.Reader) error {
+	// Read rombank
+	var tmp byte
+	if err := binary.Read(reader, binary.LittleEndian, &tmp); err != nil {
+		return err
+	}
+	r.RomBank = uint32(tmp)
+
+	// Read ramEnabled
+	var en byte
+	if err := binary.Read(reader, binary.LittleEndian, &en); err != nil {
+		return err
+	}
+	r.RamEnabled = en == 1
+
+	// Read ram
+	_, err := reader.Read(r.Ram)
+	return err
 }
 
 // Cart represents a GameBoy cartridge.
