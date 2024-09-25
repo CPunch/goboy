@@ -1,15 +1,12 @@
-//go:build !noAudio
+//go:build noAudio
 
 package apu
 
 import (
 	"fmt"
 	"math"
-	"time"
 
 	"log"
-
-	"github.com/hajimehoshi/oto"
 )
 
 const (
@@ -27,12 +24,9 @@ const (
 // Channels 1 and 2 are both Square channels, channel 3 is a arbitrary
 // waveform channel which can be set in RAM, and channel 4 outputs noise.
 type APU struct {
-	playing bool
-
 	memory      [52]byte
 	waveformRam []byte
 
-	player                 *oto.Player
 	chn1, chn2, chn3, chn4 *Channel
 	tickCounter            float64
 	lVol, rVol             float64
@@ -41,8 +35,7 @@ type APU struct {
 }
 
 // Init the sound emulation for a Gameboy.
-func (a *APU) Init(sound bool) {
-	a.playing = sound
+func (a *APU) Init(_ bool) {
 	a.waveformRam = make([]byte, 0x20)
 	a.audioBuffer = make(chan [2]byte, maxFrameBufferLength)
 
@@ -63,65 +56,10 @@ func (a *APU) Init(sound bool) {
 	a.chn4 = NewChannel()
 
 	const bufferSeconds = 120
-
-	if sound {
-		otoCtx, err := oto.NewContext(sampleRate, 2, 1, sampleRate/bufferSeconds)
-		if err != nil {
-			log.Printf("error creating oto context: %v", err)
-		}
-
-		a.player = otoCtx.NewPlayer()
-		a.playSound(bufferSeconds)
-	}
 }
 
-// Starts a goroutine which plays the sound
-func (a *APU) playSound(bufferSeconds int) {
-	frameTime := time.Second / time.Duration(bufferSeconds)
-	ticker := time.NewTicker(frameTime)
-	targetSamples := sampleRate / bufferSeconds
-	go func() {
-		var reading [2]byte
-		var buffer []byte
-		for range ticker.C {
-			fbLen := len(a.audioBuffer)
-			if fbLen >= targetSamples/2 {
-				newBuffer := make([]byte, fbLen*2)
-				for i := 0; i < fbLen*2; i += 2 {
-					reading = <-a.audioBuffer
-					newBuffer[i], newBuffer[i+1] = reading[0], reading[1]
-				}
-				buffer = newBuffer
-			}
+func (a *APU) Buffer(_ int, _ int) {
 
-			_, err := a.player.Write(buffer)
-			// log.Printf("sound buffer len: %v", len(buffer))
-			if err != nil {
-				log.Printf("error sampling: %v", err)
-			}
-		}
-	}()
-}
-
-func (a *APU) Buffer(cpuTicks int, speed int) {
-	if !a.playing {
-		return
-	}
-	a.tickCounter += float64(cpuTicks) / float64(speed)
-	if a.tickCounter < cpuTicksPerSample {
-		return
-	}
-	a.tickCounter -= cpuTicksPerSample
-
-	chn1l, chn1r := a.chn1.Sample()
-	chn2l, chn2r := a.chn2.Sample()
-	chn3l, chn3r := a.chn3.Sample()
-	chn4l, chn4r := a.chn4.Sample()
-
-	valL := (chn1l + chn2l + chn3l + chn4l) / 4
-	valR := (chn1r + chn2r + chn3r + chn4r) / 4
-
-	a.audioBuffer <- [2]byte{byte(float64(valL) * a.lVol), byte(float64(valR) * a.rVol)}
 }
 
 var soundMask = []byte{
